@@ -1,0 +1,36 @@
+🚤 DHATHURU - QUICK START
+=========================
+
+STEP 1: Open Terminal
+
+STEP 2: Go to the app folder
+cd ~/Desktop/Coding/dhathuru-app
+
+STEP 3: Install (first time only)
+npm install
+
+STEP 4: Run the app
+npm run dev
+
+STEP 5: Open browser
+http://localhost:3000
+
+✅ DONE! Your app is running!
+
+---
+
+TO VIEW ON PHONE:
+1. Find Mac IP: ifconfig | grep "inet " | grep -v 127.0.0.1
+2. Run: npm run dev -- --host
+3. On phone: http://YOUR_IP:3000
+
+---
+
+TO STOP:
+Press Control + C
+
+---
+
+For detailed instructions, see SETUP_INSTRUCTIONS.md
+
+🎉 Enjoy your Dhathuru app!
