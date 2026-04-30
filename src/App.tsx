@@ -8,6 +8,7 @@ import CustomerHome from './components/CustomerHome';
 import MyOrders from './components/MyOrders';
 import CustomerProfile from './components/CustomerProfile';
 import CustomerSettings from './components/CustomerSettings';
+import EditProfile from './components/EditProfile';
 import CaptainRegistration from './components/CaptainRegistration';
 import CaptainLogin from './components/CaptainLogin';
 import PendingApproval from './components/PendingApproval';
@@ -15,6 +16,7 @@ import CaptainOrders from './components/CaptainOrders';
 import CaptainProfile from './components/CaptainProfile';
 import CaptainSettings from './components/CaptainSettings';
 import CaptainHistory from './components/CaptainHistory';
+import EditCaptainProfile from './components/EditCaptainProfile';
 import Notifications from './components/settings/Notifications';
 import ChangePassword from './components/settings/ChangePassword';
 import Language from './components/settings/Language';
@@ -27,6 +29,7 @@ import Availability from './components/captain/Availability';
 import Subscription from './components/captain/Subscription';
 import CaptainDashboard from './components/CaptainDashboard';
 import AtollDetail from './components/AtollDetail';
+
 
 // New Competitive Bidding Screens
 import InterestedCaptains from './components/InterestedCaptains';
@@ -167,6 +170,8 @@ export default function App() {
         return <MyOrders onNavigate={handleNavigation} />;
       case 'customer-profile':
         return <CustomerProfile onNavigate={handleNavigation} />;
+      case 'edit-profile':
+        return <EditProfile onNavigate={handleNavigation} />;
       case 'customer-settings':
         return <CustomerSettings onNavigate={handleNavigation} />;
       case 'captain-registration':
@@ -181,6 +186,8 @@ export default function App() {
         return <CaptainOrders onNavigate={handleNavigation} />;
       case 'captain-profile':
         return <CaptainProfile onNavigate={handleNavigation} />;
+      case 'edit-captain-profile':
+        return <EditCaptainProfile onNavigate={handleNavigation} />;
       case 'captain-settings':
         return <CaptainSettings onNavigate={handleNavigation} />;
       case 'captain-history':
