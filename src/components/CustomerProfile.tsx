@@ -1,147 +1,259 @@
-import { ArrowLeft, Camera, Mail, Phone, CreditCard, MapPin, Edit2 } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowLeft, Camera, Edit } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { auth, db } from '../config/firebase';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 
 interface CustomerProfileProps {
   onNavigate: (screen: string) => void;
 }
 
+interface ProfileData {
+  name: string;
+  email: string;
+  phone: string;
+  idCard: string;
+  address: string;
+}
+
+interface Stats {
+  totalTrips: number;
+  upcomingTrips: number;
+  totalSpent: number;
+}
+
 export default function CustomerProfile({ onNavigate }: CustomerProfileProps) {
-  const [profileData] = useState({
-    name: 'Ahmed Mohamed',
-    phone: '+960 777 1234',
-    email: 'ahmed.mohamed@email.com',
-    idCard: 'A123456',
-    address: 'Male, Maldives',
-    photo: null
+  const [profileData, setProfileData] = useState<ProfileData>({
+    name: '',
+    email: '',
+    phone: '',
+    idCard: '',
+    address: ''
   });
+  
+  const [stats, setStats] = useState<Stats>({
+    totalTrips: 0,
+    upcomingTrips: 0,
+    totalSpent: 0
+  });
+  
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadProfileData();
+    loadStats();
+  }, []);
+
+  async function loadProfileData() {
+    const user = auth.currentUser;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Get user profile from Firestore
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        setProfileData({
+          name: data.name || user.displayName || 'Customer',
+          email: data.email || user.email || '',
+          phone: data.phone || user.phoneNumber || '',
+          idCard: data.idCard || '',
+          address: data.address || ''
+        });
+      } else {
+        // Fallback to auth data if no Firestore profile
+        setProfileData({
+          name: user.displayName || 'Customer',
+          email: user.email || '',
+          phone: user.phoneNumber || '',
+          idCard: '',
+          address: ''
+        });
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    }
+    
+    setLoading(false);
+  }
+
+  async function loadStats() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      // Get all bookings for this customer
+      const bookingsRef = collection(db, 'bookingRequests');
+      const q = query(bookingsRef, where('customerId', '==', user.uid));
+      const snapshot = await getDocs(q);
+
+      let totalTrips = 0;
+      let upcomingTrips = 0;
+      let totalSpent = 0;
+
+      snapshot.forEach((doc) => {
+        const booking = doc.data();
+        totalTrips++;
+
+        // Check if upcoming (departure date is in the future)
+        const departureDate = new Date(booking.departureDate);
+        if (departureDate > new Date()) {
+          upcomingTrips++;
+        }
+
+        // Add to total spent if booking has a final price
+        if (booking.finalPrice) {
+          totalSpent += booking.finalPrice;
+        }
+      });
+
+      setStats({
+        totalTrips,
+        upcomingTrips,
+        totalSpent
+      });
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#BDD8E9' }}>
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-[#0A2463] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-[#0A2463]">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#BDD8E9' }}>
+    <div className="min-h-screen pb-20" style={{ backgroundColor: '#BDD8E9' }}>
       {/* Header */}
-      <div className="px-6 py-4 flex items-center gap-4"
-           style={{ backgroundColor: '#0A4174' }}>
-        <button
-          onClick={() => onNavigate('customer-home')}
-          className="text-white"
-        >
-          <ArrowLeft className="w-6 h-6" />
-        </button>
-        <h1 className="text-white text-xl">My Profile</h1>
+      <div className="px-6 pt-12 pb-6"
+           style={{ background: 'linear-gradient(180deg, #0A2463 0%, #3BCEAC 100%)' }}>
+        <div className="flex items-center mb-4">
+          <button
+            onClick={() => onNavigate('customer-home')}
+            className="text-white"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-white text-2xl ml-4">My Profile</h1>
+        </div>
       </div>
 
-      {/* Profile Content */}
-      <div className="px-6 py-6">
-        {/* Profile Photo Card */}
+      {/* Profile Card */}
+      <div className="px-6 -mt-4">
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <div className="flex flex-col items-center">
-            <div className="relative mb-4">
+          {/* Avatar */}
+          <div className="flex flex-col items-center mb-6">
+            <div className="relative">
               <div 
-                className="w-32 h-32 rounded-full flex items-center justify-center shadow-lg"
-                style={{ 
-                  background: 'linear-gradient(135deg, #001D39 0%, #7BBDE8 100%)'
-                }}
+                className="w-24 h-24 rounded-full flex items-center justify-center text-white text-3xl"
+                style={{ background: 'linear-gradient(135deg, #0A2463 0%, #3BCEAC 100%)' }}
               >
-                {profileData.photo ? (
-                  <img 
-                    src={profileData.photo} 
-                    alt="Profile" 
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                ) : (
-                  <span className="text-white text-5xl">{profileData.name.charAt(0)}</span>
-                )}
+                {profileData.name.charAt(0).toUpperCase()}
               </div>
-              <button 
-                className="absolute bottom-0 right-0 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg border-2"
-                style={{ borderColor: '#0A4174' }}
-              >
-                <Camera className="w-5 h-5" style={{ color: '#0A4174' }} />
+              <button className="absolute bottom-0 right-0 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-[#3BCEAC]">
+                <Camera className="w-4 h-4 text-[#0A2463]" />
               </button>
             </div>
-            <h2 className="text-[#001D39] text-2xl mb-1">{profileData.name}</h2>
-            <p className="text-[#49769F]">Customer</p>
+            <h2 className="text-2xl font-bold mt-4" style={{ color: '#0A2463' }}>
+              {profileData.name}
+            </h2>
+            <p className="text-gray-600">Customer</p>
+          </div>
+
+          {/* Personal Information */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold" style={{ color: '#0A2463' }}>
+                Personal Information
+              </h3>
+              <button
+                onClick={() => onNavigate('edit-profile')}
+                className="text-[#3BCEAC]"
+              >
+                <Edit className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {/* Phone */}
+              <div className="bg-[#BDD8E9] rounded-lg p-4">
+                <p className="text-sm text-gray-600">Phone Number</p>
+                <p className="text-[#0A2463] font-medium">
+                  {profileData.phone || 'Not provided'}
+                </p>
+              </div>
+
+              {/* Email */}
+              <div className="bg-[#BDD8E9] rounded-lg p-4">
+                <p className="text-sm text-gray-600">Email Address</p>
+                <p className="text-[#0A2463] font-medium">
+                  {profileData.email || 'Not provided'}
+                </p>
+              </div>
+
+              {/* ID Card */}
+              {profileData.idCard && (
+                <div className="bg-[#BDD8E9] rounded-lg p-4">
+                  <p className="text-sm text-gray-600">ID Card Number</p>
+                  <p className="text-[#0A2463] font-medium">{profileData.idCard}</p>
+                </div>
+              )}
+
+              {/* Address */}
+              {profileData.address && (
+                <div className="bg-[#BDD8E9] rounded-lg p-4">
+                  <p className="text-sm text-gray-600">Address</p>
+                  <p className="text-[#0A2463] font-medium">{profileData.address}</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Personal Information Card */}
+        {/* Account Statistics */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[#001D39] text-lg">Personal Information</h3>
-            <button className="text-[#0A4174]">
-              <Edit2 className="w-5 h-5" />
-            </button>
+          <h3 className="text-lg font-semibold mb-4" style={{ color: '#0A2463' }}>
+            Account Statistics
+          </h3>
+
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="bg-[#BDD8E9] rounded-xl p-4 text-center">
+              <p className="text-3xl font-bold" style={{ color: '#0A2463' }}>
+                {stats.totalTrips}
+              </p>
+              <p className="text-sm text-gray-600">Total Trips</p>
+            </div>
+
+            <div className="bg-[#BDD8E9] rounded-xl p-4 text-center">
+              <p className="text-3xl font-bold" style={{ color: '#0A2463' }}>
+                {stats.upcomingTrips}
+              </p>
+              <p className="text-sm text-gray-600">Upcoming</p>
+            </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="flex items-start gap-4 p-4 rounded-lg" style={{ backgroundColor: '#BDD8E9' }}>
-              <Phone className="w-5 h-5 mt-0.5" style={{ color: '#0A4174' }} />
-              <div className="flex-1">
-                <p className="text-xs text-[#49769F] mb-1">Phone Number</p>
-                <p className="text-[#001D39]">{profileData.phone}</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 p-4 rounded-lg" style={{ backgroundColor: '#BDD8E9' }}>
-              <Mail className="w-5 h-5 mt-0.5" style={{ color: '#0A4174' }} />
-              <div className="flex-1">
-                <p className="text-xs text-[#49769F] mb-1">Email Address</p>
-                <p className="text-[#001D39]">{profileData.email}</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 p-4 rounded-lg" style={{ backgroundColor: '#BDD8E9' }}>
-              <CreditCard className="w-5 h-5 mt-0.5" style={{ color: '#0A4174' }} />
-              <div className="flex-1">
-                <p className="text-xs text-[#49769F] mb-1">ID Card Number</p>
-                <p className="text-[#001D39]">{profileData.idCard}</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 p-4 rounded-lg" style={{ backgroundColor: '#BDD8E9' }}>
-              <MapPin className="w-5 h-5 mt-0.5" style={{ color: '#0A4174' }} />
-              <div className="flex-1">
-                <p className="text-xs text-[#49769F] mb-1">Address</p>
-                <p className="text-[#001D39]">{profileData.address}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Account Stats Card */}
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <h3 className="text-[#001D39] text-lg mb-4">Account Statistics</h3>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div 
-              className="p-4 rounded-xl text-center"
-              style={{ backgroundColor: '#BDD8E9' }}
-            >
-              <p className="text-3xl mb-1" style={{ color: '#0A4174' }}>12</p>
-              <p className="text-sm text-[#49769F]">Total Trips</p>
-            </div>
-            
-            <div 
-              className="p-4 rounded-xl text-center"
-              style={{ backgroundColor: '#BDD8E9' }}
-            >
-              <p className="text-3xl mb-1" style={{ color: '#0A4174' }}>3</p>
-              <p className="text-sm text-[#49769F]">Upcoming</p>
-            </div>
-            
-            <div 
-              className="p-4 rounded-xl text-center col-span-2"
-              style={{ backgroundColor: '#BDD8E9' }}
-            >
-              <p className="text-3xl mb-1" style={{ color: '#0A4174' }}>MVR 5,400</p>
-              <p className="text-sm text-[#49769F]">Total Spent</p>
-            </div>
+          <div className="bg-[#BDD8E9] rounded-xl p-4 text-center">
+            <p className="text-3xl font-bold" style={{ color: '#0A2463' }}>
+              MVR {stats.totalSpent.toLocaleString()}
+            </p>
+            <p className="text-sm text-gray-600">Total Spent</p>
           </div>
         </div>
 
         {/* Edit Profile Button */}
         <button
-          className="w-full h-14 mt-6 text-white rounded-xl shadow-md hover:shadow-lg transition-shadow"
-          style={{ backgroundColor: '#0A4174' }}
+          onClick={() => onNavigate('edit-profile')}
+          className="w-full h-14 text-white rounded-xl shadow-md"
+          style={{ backgroundColor: '#0A2463' }}
         >
           Edit Profile
         </button>

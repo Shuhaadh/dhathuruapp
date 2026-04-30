@@ -1,176 +1,275 @@
-import { ArrowLeft, Camera, Mail, Phone, CreditCard, Anchor, Ship, Award } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowLeft, Camera, Edit } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { auth, db } from '../config/firebase';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 
 interface CaptainProfileProps {
   onNavigate: (screen: string) => void;
 }
 
+interface ProfileData {
+  name: string;
+  email: string;
+  phone: string;
+  licenseNumber: string;
+  boatName: string;
+  boatCapacity: string;
+}
+
+interface Stats {
+  totalTrips: number;
+  upcomingTrips: number;
+  totalEarnings: number;
+}
+
 export default function CaptainProfile({ onNavigate }: CaptainProfileProps) {
-  const [profileData] = useState({
-    name: 'Captain Ali',
-    phone: '+960 777 9999',
-    email: 'captain.ali@email.com',
-    idCard: 'A987654',
-    boatName: 'Sea Hawk',
-    capacity: '12 passengers',
-    experience: '8 years',
-    licenseNumber: 'CAP-2024-001',
-    photo: null
+  const [profileData, setProfileData] = useState<ProfileData>({
+    name: '',
+    email: '',
+    phone: '',
+    licenseNumber: '',
+    boatName: '',
+    boatCapacity: ''
   });
+  
+  const [stats, setStats] = useState<Stats>({
+    totalTrips: 0,
+    upcomingTrips: 0,
+    totalEarnings: 0
+  });
+  
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadProfileData();
+    loadStats();
+  }, []);
+
+  async function loadProfileData() {
+    const user = auth.currentUser;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Get captain profile from Firestore
+      const captainDoc = await getDoc(doc(db, 'captains', user.uid));
+      
+      if (captainDoc.exists()) {
+        const data = captainDoc.data();
+        setProfileData({
+          name: data.name || user.displayName || 'Captain',
+          email: data.email || user.email || '',
+          phone: data.phone || user.phoneNumber || '',
+          licenseNumber: data.licenseNumber || '',
+          boatName: data.boatName || '',
+          boatCapacity: data.boatCapacity || ''
+        });
+      } else {
+        // Fallback to auth data if no Firestore profile
+        setProfileData({
+          name: user.displayName || 'Captain',
+          email: user.email || '',
+          phone: user.phoneNumber || '',
+          licenseNumber: '',
+          boatName: '',
+          boatCapacity: ''
+        });
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    }
+    
+    setLoading(false);
+  }
+
+  async function loadStats() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      // Get all confirmed bookings for this captain
+      const bookingsRef = collection(db, 'bookingRequests');
+      const q = query(
+        bookingsRef, 
+        where('confirmedCaptainId', '==', user.uid),
+        where('status', '==', 'confirmed')
+      );
+      const snapshot = await getDocs(q);
+
+      let totalTrips = 0;
+      let upcomingTrips = 0;
+      let totalEarnings = 0;
+
+      snapshot.forEach((doc) => {
+        const booking = doc.data();
+        totalTrips++;
+
+        // Check if upcoming
+        const departureDate = new Date(booking.departureDate);
+        if (departureDate > new Date()) {
+          upcomingTrips++;
+        }
+
+        // Add to earnings
+        if (booking.finalPrice) {
+          totalEarnings += booking.finalPrice;
+        }
+      });
+
+      setStats({
+        totalTrips,
+        upcomingTrips,
+        totalEarnings
+      });
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#BDD8E9' }}>
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-[#0A2463] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-[#0A2463]">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#BDD8E9' }}>
+    <div className="min-h-screen pb-20" style={{ backgroundColor: '#BDD8E9' }}>
       {/* Header */}
-      <div className="px-6 py-4 flex items-center gap-4"
-           style={{ backgroundColor: '#0A4174' }}>
-        <button
-          onClick={() => onNavigate('captain-dashboard')}
-          className="text-white"
-        >
-          <ArrowLeft className="w-6 h-6" />
-        </button>
-        <h1 className="text-white text-xl">My Profile</h1>
+      <div className="px-6 pt-12 pb-6"
+           style={{ background: 'linear-gradient(180deg, #0A2463 0%, #3BCEAC 100%)' }}>
+        <div className="flex items-center mb-4">
+          <button
+            onClick={() => onNavigate('captain-dashboard')}
+            className="text-white"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-white text-2xl ml-4">My Profile</h1>
+        </div>
       </div>
 
-      {/* Profile Content */}
-      <div className="px-6 py-6">
-        {/* Profile Photo Card */}
+      {/* Profile Card */}
+      <div className="px-6 -mt-4">
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <div className="flex flex-col items-center">
-            <div className="relative mb-4">
+          {/* Avatar */}
+          <div className="flex flex-col items-center mb-6">
+            <div className="relative">
               <div 
-                className="w-32 h-32 rounded-full flex items-center justify-center shadow-lg"
-                style={{ 
-                  background: 'linear-gradient(135deg, #001D39 0%, #7BBDE8 100%)'
-                }}
+                className="w-24 h-24 rounded-full flex items-center justify-center text-white text-3xl"
+                style={{ background: 'linear-gradient(135deg, #0A2463 0%, #3BCEAC 100%)' }}
               >
-                {profileData.photo ? (
-                  <img 
-                    src={profileData.photo} 
-                    alt="Profile" 
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                ) : (
-                  <Anchor className="w-16 h-16 text-white" />
-                )}
+                {profileData.name.charAt(0).toUpperCase()}
               </div>
-              <button 
-                className="absolute bottom-0 right-0 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg border-2"
-                style={{ borderColor: '#0A4174' }}
-              >
-                <Camera className="w-5 h-5" style={{ color: '#0A4174' }} />
+              <button className="absolute bottom-0 right-0 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-[#3BCEAC]">
+                <Camera className="w-4 h-4 text-[#0A2463]" />
               </button>
             </div>
-            <h2 className="text-[#001D39] text-2xl mb-1">{profileData.name}</h2>
-            <p className="text-[#49769F]">Licensed Captain</p>
+            <h2 className="text-2xl font-bold mt-4" style={{ color: '#0A2463' }}>
+              {profileData.name}
+            </h2>
+            <p className="text-gray-600">Captain</p>
+          </div>
+
+          {/* Personal Information */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold" style={{ color: '#0A2463' }}>
+                Personal Information
+              </h3>
+              <button
+                onClick={() => onNavigate('edit-captain-profile')}
+                className="text-[#3BCEAC]"
+              >
+                <Edit className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {/* Phone */}
+              <div className="bg-[#BDD8E9] rounded-lg p-4">
+                <p className="text-sm text-gray-600">Phone Number</p>
+                <p className="text-[#0A2463] font-medium">
+                  {profileData.phone || 'Not provided'}
+                </p>
+              </div>
+
+              {/* Email */}
+              <div className="bg-[#BDD8E9] rounded-lg p-4">
+                <p className="text-sm text-gray-600">Email Address</p>
+                <p className="text-[#0A2463] font-medium">
+                  {profileData.email || 'Not provided'}
+                </p>
+              </div>
+
+              {/* License */}
+              {profileData.licenseNumber && (
+                <div className="bg-[#BDD8E9] rounded-lg p-4">
+                  <p className="text-sm text-gray-600">License Number</p>
+                  <p className="text-[#0A2463] font-medium">{profileData.licenseNumber}</p>
+                </div>
+              )}
+
+              {/* Boat Name */}
+              {profileData.boatName && (
+                <div className="bg-[#BDD8E9] rounded-lg p-4">
+                  <p className="text-sm text-gray-600">Boat Name</p>
+                  <p className="text-[#0A2463] font-medium">{profileData.boatName}</p>
+                </div>
+              )}
+
+              {/* Boat Capacity */}
+              {profileData.boatCapacity && (
+                <div className="bg-[#BDD8E9] rounded-lg p-4">
+                  <p className="text-sm text-gray-600">Boat Capacity</p>
+                  <p className="text-[#0A2463] font-medium">{profileData.boatCapacity} passengers</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Personal Information Card */}
+        {/* Account Statistics */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <h3 className="text-[#001D39] text-lg mb-4">Personal Information</h3>
+          <h3 className="text-lg font-semibold mb-4" style={{ color: '#0A2463' }}>
+            Account Statistics
+          </h3>
 
-          <div className="space-y-4">
-            <div className="flex items-start gap-4 p-4 rounded-lg" style={{ backgroundColor: '#BDD8E9' }}>
-              <Phone className="w-5 h-5 mt-0.5" style={{ color: '#0A4174' }} />
-              <div className="flex-1">
-                <p className="text-xs text-[#49769F] mb-1">Phone Number</p>
-                <p className="text-[#001D39]">{profileData.phone}</p>
-              </div>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="bg-[#BDD8E9] rounded-xl p-4 text-center">
+              <p className="text-3xl font-bold" style={{ color: '#0A2463' }}>
+                {stats.totalTrips}
+              </p>
+              <p className="text-sm text-gray-600">Total Trips</p>
             </div>
 
-            <div className="flex items-start gap-4 p-4 rounded-lg" style={{ backgroundColor: '#BDD8E9' }}>
-              <Mail className="w-5 h-5 mt-0.5" style={{ color: '#0A4174' }} />
-              <div className="flex-1">
-                <p className="text-xs text-[#49769F] mb-1">Email Address</p>
-                <p className="text-[#001D39]">{profileData.email}</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 p-4 rounded-lg" style={{ backgroundColor: '#BDD8E9' }}>
-              <CreditCard className="w-5 h-5 mt-0.5" style={{ color: '#0A4174' }} />
-              <div className="flex-1">
-                <p className="text-xs text-[#49769F] mb-1">ID Card Number</p>
-                <p className="text-[#001D39]">{profileData.idCard}</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 p-4 rounded-lg" style={{ backgroundColor: '#BDD8E9' }}>
-              <Award className="w-5 h-5 mt-0.5" style={{ color: '#0A4174' }} />
-              <div className="flex-1">
-                <p className="text-xs text-[#49769F] mb-1">License Number</p>
-                <p className="text-[#001D39]">{profileData.licenseNumber}</p>
-              </div>
+            <div className="bg-[#BDD8E9] rounded-xl p-4 text-center">
+              <p className="text-3xl font-bold" style={{ color: '#0A2463' }}>
+                {stats.upcomingTrips}
+              </p>
+              <p className="text-sm text-gray-600">Upcoming</p>
             </div>
           </div>
-        </div>
 
-        {/* Boat Information Card */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <h3 className="text-[#001D39] text-lg mb-4">Boat Information</h3>
-
-          <div className="space-y-4">
-            <div className="flex items-start gap-4 p-4 rounded-lg" style={{ backgroundColor: '#BDD8E9' }}>
-              <Ship className="w-5 h-5 mt-0.5" style={{ color: '#0A4174' }} />
-              <div className="flex-1">
-                <p className="text-xs text-[#49769F] mb-1">Boat Name</p>
-                <p className="text-[#001D39]">{profileData.boatName}</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 p-4 rounded-lg" style={{ backgroundColor: '#BDD8E9' }}>
-              <Award className="w-5 h-5 mt-0.5" style={{ color: '#0A4174' }} />
-              <div className="flex-1">
-                <p className="text-xs text-[#49769F] mb-1">Passenger Capacity</p>
-                <p className="text-[#001D39]">{profileData.capacity}</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 p-4 rounded-lg" style={{ backgroundColor: '#BDD8E9' }}>
-              <Award className="w-5 h-5 mt-0.5" style={{ color: '#0A4174' }} />
-              <div className="flex-1">
-                <p className="text-xs text-[#49769F] mb-1">Experience</p>
-                <p className="text-[#001D39]">{profileData.experience}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Account Stats Card */}
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <h3 className="text-[#001D39] text-lg mb-4">Captain Statistics</h3>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div 
-              className="p-4 rounded-xl text-center"
-              style={{ backgroundColor: '#BDD8E9' }}
-            >
-              <p className="text-3xl mb-1" style={{ color: '#0A4174' }}>156</p>
-              <p className="text-sm text-[#49769F]">Total Trips</p>
-            </div>
-            
-            <div 
-              className="p-4 rounded-xl text-center"
-              style={{ backgroundColor: '#BDD8E9' }}
-            >
-              <p className="text-3xl mb-1" style={{ color: '#0A4174' }}>4.8</p>
-              <p className="text-sm text-[#49769F]">Rating</p>
-            </div>
-            
-            <div 
-              className="p-4 rounded-xl text-center col-span-2"
-              style={{ backgroundColor: '#BDD8E9' }}
-            >
-              <p className="text-3xl mb-1" style={{ color: '#0A4174' }}>MVR 78,000</p>
-              <p className="text-sm text-[#49769F]">Total Earnings</p>
-            </div>
+          <div className="bg-[#BDD8E9] rounded-xl p-4 text-center">
+            <p className="text-3xl font-bold" style={{ color: '#0A2463' }}>
+              MVR {stats.totalEarnings.toLocaleString()}
+            </p>
+            <p className="text-sm text-gray-600">Total Earnings</p>
           </div>
         </div>
 
         {/* Edit Profile Button */}
         <button
-          className="w-full h-14 mt-6 text-white rounded-xl shadow-md hover:shadow-lg transition-shadow"
-          style={{ backgroundColor: '#0A4174' }}
+          onClick={() => onNavigate('edit-captain-profile')}
+          className="w-full h-14 text-white rounded-xl shadow-md"
+          style={{ backgroundColor: '#0A2463' }}
         >
           Edit Profile
         </button>
